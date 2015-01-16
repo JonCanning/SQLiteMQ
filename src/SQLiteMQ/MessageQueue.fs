@@ -33,12 +33,13 @@ exception DeleteObjectFailed of string
 let private pickler = FsPickler.CreateBinary()
 let mutable private connection = Unchecked.defaultof<_>
 
-let private addType<'a> (command : SQLiteCommand) = 
-  SQLiteParameter("Type", typeof<'a>.FullName)
+let addParameter (name : string, value : obj) (command : SQLiteCommand) = 
+  SQLiteParameter(name, value)
   |> command.Parameters.Add
   |> ignore
   command
 
+let private addTypeParameter<'a> (command : SQLiteCommand) = command |> addParameter ("Type", typeof<'a>.FullName)
 let private executeNonQuery (command : SQLiteCommand) = command.ExecuteNonQuery()
 let private executeReader (command : SQLiteCommand) = command.ExecuteReader()
 
@@ -58,14 +59,14 @@ let private createCommand command =
 let private enqueue<'a> o command = 
   let pickle = pickler.Pickle<'a> o
   command
-  |> addType<'a>
-  |> fun c -> SQLiteParameter("Value", pickle) |> c.Parameters.Add
+  |> addTypeParameter<'a>
+  |> addParameter("Value", pickle)
+  |> executeNonQuery
   |> ignore
-  command.ExecuteNonQuery() |> ignore
 
 let private delete<'a> command = 
   match command
-        |> addType<'a>
+        |> addTypeParameter<'a>
         |> executeNonQuery with
   | 1 -> ()
   | _ -> DeleteObjectFailed typeof<'a>.FullName |> raise
@@ -73,7 +74,7 @@ let private delete<'a> command =
 let private dequeue<'a> command = 
   let reader = 
     command
-    |> addType<'a>
+    |> addTypeParameter<'a>
     |> executeReader
   if reader.Read() then 
     use ms = new MemoryStream()
@@ -86,7 +87,7 @@ let private dequeue<'a> command =
 let private dequeueAll<'a> command = 
   let reader = 
     command
-    |> addType<'a>
+    |> addTypeParameter<'a>
     |> executeReader
   seq { 
     while reader.Read() do
@@ -95,11 +96,6 @@ let private dequeueAll<'a> command =
       createCommand Delete |> delete<'a>
       yield pickler.UnPickle<'a>(ms.ToArray())
   }
-
-let private clear<'a> command = 
-  command
-  |> addType<'a>
-  |> executeNonQuery
 
 let private createTable _ = 
   use command = createCommand TableExists
@@ -120,7 +116,12 @@ let create storage =
       member __.Enqueue o = createCommand Enqueue |> enqueue o
       member __.Dequeue() = createCommand Dequeue |> dequeue
       member __.DequeueAll() = createCommand DequeueAll |> dequeueAll
-      member __.Clear<'a when 'a : not struct>() = createCommand Clear |> clear<'a>
+      
+      member __.Clear<'a when 'a : not struct>() = 
+        createCommand Clear
+        |> addTypeParameter<'a>
+        |> executeNonQuery
+      
       member __.ClearAll() = createCommand ClearAll |> executeNonQuery
     interface IDisposable with
       member __.Dispose() = connection.Dispose() }
