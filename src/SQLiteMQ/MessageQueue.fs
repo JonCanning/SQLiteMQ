@@ -10,10 +10,10 @@ type Operations =
   abstract Enqueue<'a when 'a : not struct> : 'a -> unit
   abstract Dequeue<'a when 'a : not struct> : unit -> 'a option
   abstract DequeueAll<'a when 'a : not struct> : unit -> 'a seq
-  abstract Clear<'a when 'a : not struct> : unit -> int
-  abstract ClearAll : unit -> int
+  abstract Delete<'a when 'a : not struct> : unit -> int
+  abstract DeleteAll : unit -> int
   abstract Peek<'a when 'a : not struct> : unit -> 'a option
-  abstract Delete<'a when 'a : not struct> : unit -> unit
+  abstract DeleteFirst<'a when 'a : not struct> : unit -> unit
 
 type Storage = 
   | InMemory
@@ -22,13 +22,13 @@ type Storage =
 
 type Command = 
   | InsertOneOfType
-  | DeleteOneOfType
-  | SelectOneOfType
+  | DeleteFirstOfType
+  | SelectFirstOfType
   | SelectAllOfType
   | DeleteAllOfType
   | TableExists
   | CreateTable
-  | ClearAll
+  | DeleteAll
 
 exception DeleteObjectFailed of string
 
@@ -49,14 +49,14 @@ let private createCommand command =
   let sql = 
     match command with
     | InsertOneOfType -> "INSERT INTO MessageQueue(Type,Value) values (@Type,@Value)"
-    | DeleteOneOfType -> 
+    | DeleteFirstOfType -> 
       "DELETE FROM MessageQueue WHERE ROWID = (SELECT ROWID FROM MessageQueue WHERE Type=@Type LIMIT 1)"
     | DeleteAllOfType -> "DELETE FROM MessageQueue WHERE Type=@Type"
-    | SelectOneOfType -> "SELECT Value FROM MessageQueue WHERE Type=@Type LIMIT 1"
+    | SelectFirstOfType -> "SELECT Value FROM MessageQueue WHERE Type=@Type LIMIT 1"
     | SelectAllOfType -> "SELECT Value FROM MessageQueue WHERE Type=@Type"
     | TableExists -> "SELECT name FROM sqlite_master WHERE type='table'"
     | CreateTable -> "CREATE TABLE MessageQueue (Type VARCHAR, Value VARBINARY)"
-    | ClearAll -> "DELETE FROM MessageQueue"
+    | DeleteAll -> "DELETE FROM MessageQueue"
   new SQLiteCommand(sql, connection)
 
 let private enqueue<'a> o command = 
@@ -88,7 +88,7 @@ let peek<'a> command =
 
 let private dequeue<'a> command = 
   let o = peek<'a> command
-  if o.IsSome then createCommand DeleteOneOfType |> delete<'a>
+  if o.IsSome then createCommand DeleteFirstOfType |> delete<'a>
   o
 
 let private dequeueAll<'a> command = 
@@ -100,7 +100,7 @@ let private dequeueAll<'a> command =
     while reader.Read() do
       use ms = new MemoryStream()
       reader.GetStream(0).CopyTo ms
-      createCommand DeleteOneOfType |> delete<'a>
+      createCommand DeleteFirstOfType |> delete<'a>
       yield pickler.UnPickle<'a>(ms.ToArray())
   }
 
@@ -122,16 +122,16 @@ let create storage =
   createTable connection
   { new Operations with
       member __.Enqueue o = createCommand InsertOneOfType |> enqueue o
-      member __.Dequeue() = createCommand SelectOneOfType |> dequeue
+      member __.Dequeue() = createCommand SelectFirstOfType |> dequeue
       member __.DequeueAll() = createCommand SelectAllOfType |> dequeueAll
       
-      member __.Clear<'a when 'a : not struct>() = 
+      member __.Delete<'a when 'a : not struct>() = 
         createCommand DeleteAllOfType
         |> addTypeParameter<'a>
         |> executeNonQuery
       
-      member __.ClearAll() = createCommand ClearAll |> executeNonQuery
-      member __.Peek() = createCommand SelectOneOfType |> peek
-      member __.Delete<'a when 'a : not struct>() = createCommand DeleteOneOfType |> delete<'a>
+      member __.DeleteAll() = createCommand DeleteAll |> executeNonQuery
+      member __.Peek() = createCommand SelectFirstOfType |> peek
+      member __.DeleteFirst<'a when 'a : not struct>() = createCommand DeleteFirstOfType |> delete<'a>
     interface IDisposable with
       member __.Dispose() = connection.Dispose() }

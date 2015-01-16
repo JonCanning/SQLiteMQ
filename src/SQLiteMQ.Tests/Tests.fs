@@ -52,7 +52,7 @@ let ``it can clear the queue of a type``() =
   cats |> Seq.iter mq.Enqueue
   let dog = { Dog.Name = "Rufus" }
   dog |> mq.Enqueue
-  mq.Clear<Cat>() |> should equal 10
+  mq.Delete<Cat>() |> should equal 10
   mq.Dequeue<Cat>() |> should equal None
   mq.Dequeue<Dog>()
   |> should equal
@@ -63,7 +63,7 @@ let ``it can clear the queue of all types``() =
   use mq = MessageQueue.create InMemory
   { Cat.Name = "Bubbles" } |> mq.Enqueue
   { Dog.Name = "Rufus" } |> mq.Enqueue
-  mq.ClearAll() |> should equal 2
+  mq.DeleteAll() |> should equal 2
   mq.Dequeue<Cat>() |> should equal None
   mq.Dequeue<Dog>() |> should equal None
 
@@ -77,12 +77,7 @@ let ``it can return a sequence of a type``() =
 
 [<Test>]
 let ``it persists the queue``() = 
-  let createMq _ =
-    Guid.NewGuid
-    |> sprintf "%s\%O.db" Environment.CurrentDirectory
-    |> File
-    |> MessageQueue.create
-  
+  let createMq _ = MessageQueue.create DefaultFile
   use mq = createMq()
   let cat = { Cat.Name = "Bubbles" }
   cat |> mq.Enqueue
@@ -109,5 +104,5 @@ let ``it deletes``() =
   use mq = MessageQueue.create InMemory
   let cat = { Cat.Name = "Bubbles" }
   cat |> mq.Enqueue
-  mq.Delete<Cat>()
+  mq.DeleteFirst<Cat>()
   mq.Dequeue<Cat>() |> should equal None
