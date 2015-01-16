@@ -44,7 +44,7 @@ let ``it queues different types``() =
   <| Some cat
 
 [<Test>]
-let ``it can clear the queue of a type``() =
+let ``it can clear the queue of a type``() = 
   use mq = MessageQueue.create InMemory
   let cats = [ 1..10 ] |> List.map (fun i -> { Cat.Name = sprintf "%i" i })
   cats |> Seq.iter mq.Enqueue
@@ -54,10 +54,10 @@ let ``it can clear the queue of a type``() =
   mq.Dequeue<Cat>() |> should equal None
   mq.Dequeue<Dog>()
   |> should equal
-  <| Some dog    
+  <| Some dog
 
 [<Test>]
-let ``it can clear the queue of all types``() =
+let ``it can clear the queue of all types``() = 
   use mq = MessageQueue.create InMemory
   { Cat.Name = "Bubbles" } |> mq.Enqueue
   { Dog.Name = "Rufus" } |> mq.Enqueue
@@ -66,7 +66,7 @@ let ``it can clear the queue of all types``() =
   mq.Dequeue<Dog>() |> should equal None
 
 [<Test>]
-let ``it can return a sequence of a type``() =
+let ``it can return a sequence of a type``() = 
   use mq = MessageQueue.create InMemory
   let cats = [ 1..10 ] |> List.map (fun i -> { Cat.Name = sprintf "%i" i })
   cats |> Seq.iter mq.Enqueue
@@ -79,12 +79,32 @@ let ``it persists the queue``() =
     Environment.CurrentDirectory
     |> File
     |> MessageQueue.create
+  
   use mq = createMq()
   let cat = { Cat.Name = "Bubbles" }
   cat |> mq.Enqueue
-
   use mq = createMq()
   let cat = { Cat.Name = "Bubbles" }
   mq.Dequeue<Cat>()
   |> should equal
   <| Some cat
+
+[<Test>]
+let ``it peeks``() = 
+  use mq = MessageQueue.create InMemory
+  let cat = { Cat.Name = "Bubbles" }
+  cat |> mq.Enqueue
+  mq.Peek<Cat>()
+  |> should equal
+  <| Some cat
+  mq.Peek<Cat>()
+  |> should equal
+  <| Some cat
+
+[<Test>]
+let ``it deletes``() = 
+  use mq = MessageQueue.create InMemory
+  let cat = { Cat.Name = "Bubbles" }
+  cat |> mq.Enqueue
+  mq.Delete<Cat>()
+  mq.Dequeue<Cat>() |> should equal None

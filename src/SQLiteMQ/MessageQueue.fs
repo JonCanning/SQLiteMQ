@@ -3,7 +3,6 @@
 open Nessos.FsPickler
 open System
 open System.Data.SQLite
-open System.Diagnostics
 open System.IO
 
 type Operations = 
@@ -13,17 +12,19 @@ type Operations =
   abstract DequeueAll<'a when 'a : not struct> : unit -> 'a seq
   abstract Clear<'a when 'a : not struct> : unit -> int
   abstract ClearAll : unit -> int
+  abstract Peek<'a when 'a : not struct> : unit -> 'a option
+  abstract Delete<'a when 'a : not struct> : unit -> unit
 
 type Storage = 
   | InMemory
   | File of string
 
 type Command = 
-  | Enqueue
-  | Delete
-  | Dequeue
-  | DequeueAll
-  | Clear
+  | InsertOneOfType
+  | DeleteOneOfType
+  | SelectOneOfType
+  | SelectAllOfType
+  | DeleteAllOfType
   | TableExists
   | CreateTable
   | ClearAll
@@ -46,11 +47,12 @@ let private executeReader (command : SQLiteCommand) = command.ExecuteReader()
 let private createCommand command = 
   let sql = 
     match command with
-    | Enqueue -> "INSERT INTO MessageQueue(Type,Value) values (@Type,@Value)"
-    | Delete -> "DELETE FROM MessageQueue WHERE ROWID = (SELECT ROWID FROM MessageQueue WHERE Type=@Type LIMIT 1)"
-    | Clear -> "DELETE FROM MessageQueue WHERE Type=@Type"
-    | Dequeue -> "SELECT Value FROM MessageQueue WHERE Type=@Type LIMIT 1"
-    | DequeueAll -> "SELECT Value FROM MessageQueue WHERE Type=@Type"
+    | InsertOneOfType -> "INSERT INTO MessageQueue(Type,Value) values (@Type,@Value)"
+    | DeleteOneOfType -> 
+      "DELETE FROM MessageQueue WHERE ROWID = (SELECT ROWID FROM MessageQueue WHERE Type=@Type LIMIT 1)"
+    | DeleteAllOfType -> "DELETE FROM MessageQueue WHERE Type=@Type"
+    | SelectOneOfType -> "SELECT Value FROM MessageQueue WHERE Type=@Type LIMIT 1"
+    | SelectAllOfType -> "SELECT Value FROM MessageQueue WHERE Type=@Type"
     | TableExists -> "SELECT name FROM sqlite_master WHERE type='table'"
     | CreateTable -> "CREATE TABLE MessageQueue (Type VARCHAR, Value VARBINARY)"
     | ClearAll -> "DELETE FROM MessageQueue"
@@ -60,18 +62,18 @@ let private enqueue<'a> o command =
   let pickle = pickler.Pickle<'a> o
   command
   |> addTypeParameter<'a>
-  |> addParameter("Value", pickle)
+  |> addParameter ("Value", pickle)
   |> executeNonQuery
   |> ignore
 
 let private delete<'a> command = 
-  match command
-        |> addTypeParameter<'a>
-        |> executeNonQuery with
-  | 1 -> ()
-  | _ -> DeleteObjectFailed typeof<'a>.FullName |> raise
+  if command
+     |> addTypeParameter<'a>
+     |> executeNonQuery
+     <> 1
+  then DeleteObjectFailed typeof<'a>.FullName |> raise
 
-let private dequeue<'a> command = 
+let peek<'a> command = 
   let reader = 
     command
     |> addTypeParameter<'a>
@@ -80,9 +82,13 @@ let private dequeue<'a> command =
     use ms = new MemoryStream()
     reader.GetStream(0).CopyTo ms
     let o = pickler.UnPickle<'a>(ms.ToArray())
-    createCommand Delete |> delete<'a>
     Some o
   else None
+
+let private dequeue<'a> command = 
+  let o = peek<'a> command
+  if o.IsSome then createCommand DeleteOneOfType |> delete<'a>
+  o
 
 let private dequeueAll<'a> command = 
   let reader = 
@@ -93,7 +99,7 @@ let private dequeueAll<'a> command =
     while reader.Read() do
       use ms = new MemoryStream()
       reader.GetStream(0).CopyTo ms
-      createCommand Delete |> delete<'a>
+      createCommand DeleteOneOfType |> delete<'a>
       yield pickler.UnPickle<'a>(ms.ToArray())
   }
 
@@ -113,15 +119,17 @@ let create storage =
   connection.Open()
   createTable connection
   { new Operations with
-      member __.Enqueue o = createCommand Enqueue |> enqueue o
-      member __.Dequeue() = createCommand Dequeue |> dequeue
-      member __.DequeueAll() = createCommand DequeueAll |> dequeueAll
+      member __.Enqueue o = createCommand InsertOneOfType |> enqueue o
+      member __.Dequeue() = createCommand SelectOneOfType |> dequeue
+      member __.DequeueAll() = createCommand SelectAllOfType |> dequeueAll
       
       member __.Clear<'a when 'a : not struct>() = 
-        createCommand Clear
+        createCommand DeleteAllOfType
         |> addTypeParameter<'a>
         |> executeNonQuery
       
       member __.ClearAll() = createCommand ClearAll |> executeNonQuery
+      member __.Peek() = createCommand SelectOneOfType |> peek
+      member __.Delete<'a when 'a : not struct>() = createCommand DeleteOneOfType |> delete<'a>
     interface IDisposable with
       member __.Dispose() = connection.Dispose() }
