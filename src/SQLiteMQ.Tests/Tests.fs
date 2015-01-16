@@ -16,7 +16,7 @@ let ``it enqueues and dequeues``() =
   use mq = MessageQueue.create InMemory
   let cat = { Cat.Name = "Bubbles" }
   cat |> mq.Enqueue
-  mq.Dequeue<Cat>() |> ignore
+  mq.Dequeue<Cat>() |> should equal <| Some cat
   mq.Dequeue<Cat>() |> should equal None
 
 [<Test>]
