@@ -3,6 +3,7 @@
 open Nessos.FsPickler
 open System
 open System.Data.SQLite
+open System.Diagnostics
 open System.IO
 
 type Operations = 
@@ -32,24 +33,14 @@ exception DeleteObjectFailed of string
 let private pickler = FsPickler.CreateBinary()
 let mutable private connection = Unchecked.defaultof<_>
 
-let debug (command : SQLiteCommand) = 
-  command.CommandText |> printfn "%s"
-  for p in command.Parameters do
-    printfn "%s:%O" p.ParameterName p.Value
-
 let private addType<'a> (command : SQLiteCommand) = 
   SQLiteParameter("Type", typeof<'a>.FullName)
   |> command.Parameters.Add
   |> ignore
   command
 
-let private executeNonQuery (command : SQLiteCommand) = 
-  command |> debug
-  command.ExecuteNonQuery()
-
-let private executeReader (command : SQLiteCommand) = 
-  command |> debug
-  command.ExecuteReader()
+let private executeNonQuery (command : SQLiteCommand) = command.ExecuteNonQuery()
+let private executeReader (command : SQLiteCommand) = command.ExecuteReader()
 
 let private createCommand command = 
   let sql = 
