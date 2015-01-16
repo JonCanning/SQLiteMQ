@@ -1,7 +1,10 @@
 build_script:
-  build.bat 
+  build.bat Appveyor
   
 test: off
 
-build:
-  publish_nuget: true  
+environment:
+  NUGETAPIKEY:
+    secure: U/C8utoQCzFyIpw6aBnkaMAasuZnUTRm/BClhJc1GPc=
+  NUGETSOURCE:
+    secure: nok7AMySupNjXNQnJN9jGANsTdIeK8OGO4qapsIj32zPS/AGvtyf1vGauXe6IOSsjMrSO+sKGb3u3sg01Qvv+GlllqNhC7eia8hkTeXX1xk=
