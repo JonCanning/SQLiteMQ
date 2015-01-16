@@ -17,6 +17,7 @@ type Operations =
 
 type Storage = 
   | InMemory
+  | DefaultFile
   | File of string
 
 type Command = 
@@ -114,7 +115,8 @@ let private createTable _ =
 let create storage = 
   connection <- match storage with
                 | InMemory -> "Data Source=:memory:"
-                | File location -> sprintf @"Data Source=%s\SQLiteMQ.db" location
+                | DefaultFile -> "Data Source=SQLiteMQ.db"
+                | File location -> sprintf @"Data Source=%s" location
                 |> fun cs -> new SQLiteConnection(cs)
   connection.Open()
   createTable connection

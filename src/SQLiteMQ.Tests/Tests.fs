@@ -16,7 +16,9 @@ let ``it enqueues and dequeues``() =
   use mq = MessageQueue.create InMemory
   let cat = { Cat.Name = "Bubbles" }
   cat |> mq.Enqueue
-  mq.Dequeue<Cat>() |> should equal <| Some cat
+  mq.Dequeue<Cat>()
+  |> should equal
+  <| Some cat
   mq.Dequeue<Cat>() |> should equal None
 
 [<Test>]
@@ -75,8 +77,9 @@ let ``it can return a sequence of a type``() =
 
 [<Test>]
 let ``it persists the queue``() = 
-  let createMq _ = 
-    Environment.CurrentDirectory
+  let createMq _ =
+    Guid.NewGuid
+    |> sprintf "%s\%O.db" Environment.CurrentDirectory
     |> File
     |> MessageQueue.create
   
