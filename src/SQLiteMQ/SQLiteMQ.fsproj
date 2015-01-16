@@ -61,6 +61,7 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     <None Include="paket.references" />
+    <None Include="SQLiteMQ.nuspec" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="mscorlib" />

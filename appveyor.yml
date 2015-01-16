@@ -1,4 +1,2 @@
-build_script:
-  build.bat
-  
-test: off
+build:
+  publish_nuget: true  
