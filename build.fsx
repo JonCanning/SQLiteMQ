@@ -31,7 +31,7 @@ Target "NuGet" (fun _ ->
     psi.Arguments <- sprintf "push SQLiteMQ.%s.nupkg -ApiKey %s -Source %s" appVeyorBuildVersion 
                      <| environVar "NUGETAPIKEY" <| environVar "NUGETSOURCE")
   |> ignore)
-Target "Default" (fun _ -> trace "Building and Running Tests")
+Target "Default" DoNothing
 Target "Appveyor" DoNothing
 // Dependencies
 "Build" ==> "Test" ==> "Default"
