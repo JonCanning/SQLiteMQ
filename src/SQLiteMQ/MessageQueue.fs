@@ -67,7 +67,7 @@ let private enqueue<'a> o command =
   |> executeNonQuery
   |> ignore
 
-let private delete<'a> command = 
+let private deleteFirstOfType<'a> command = 
   if command
      |> addTypeParameter<'a>
      |> executeNonQuery
@@ -88,7 +88,7 @@ let peek<'a> command =
 
 let private dequeue<'a> command = 
   let o = peek<'a> command
-  if o.IsSome then createCommand DeleteFirstOfType |> delete<'a>
+  if o.IsSome then createCommand DeleteFirstOfType |> deleteFirstOfType<'a>
   o
 
 let private dequeueAll<'a> command = 
@@ -100,7 +100,7 @@ let private dequeueAll<'a> command =
     while reader.Read() do
       use ms = new MemoryStream()
       reader.GetStream(0).CopyTo ms
-      createCommand DeleteFirstOfType |> delete<'a>
+      createCommand DeleteFirstOfType |> deleteFirstOfType<'a>
       yield pickler.UnPickle<'a>(ms.ToArray())
   }
 
@@ -132,6 +132,6 @@ let create storage =
       
       member __.DeleteAll() = createCommand DeleteAll |> executeNonQuery
       member __.Peek() = createCommand SelectFirstOfType |> peek
-      member __.DeleteFirst<'a when 'a : not struct>() = createCommand DeleteFirstOfType |> delete<'a>
+      member __.DeleteFirst<'a when 'a : not struct>() = createCommand DeleteFirstOfType |> deleteFirstOfType<'a>
     interface IDisposable with
       member __.Dispose() = connection.Dispose() }
