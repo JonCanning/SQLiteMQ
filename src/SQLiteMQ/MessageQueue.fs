@@ -12,7 +12,8 @@ type Operations =
   abstract DequeueAll<'a when 'a : not struct> : unit -> 'a seq
   abstract Delete<'a when 'a : not struct> : unit -> int
   abstract DeleteAll : unit -> int
-  abstract Peek<'a when 'a : not struct> : unit -> 'a option
+  abstract PeekFirst<'a when 'a : not struct> : unit -> 'a option
+  abstract PeekAll<'a when 'a : not struct> : unit -> 'a seq
   abstract DeleteFirst<'a when 'a : not struct> : unit -> unit
 
 type Storage = 
@@ -74,6 +75,18 @@ let private deleteFirstOfType<'a> command =
      <> 1
   then DeleteObjectFailed typeof<'a>.FullName |> raise
 
+let private peekAll<'a> command =
+  let reader = 
+    command
+    |> addTypeParameter<'a>
+    |> executeReader
+  seq { 
+    while reader.Read() do
+      use ms = new MemoryStream()
+      reader.GetStream(0).CopyTo ms
+      yield pickler.UnPickle<'a>(ms.ToArray())
+  }
+
 let peek<'a> command = 
   let reader = 
     command
@@ -131,7 +144,8 @@ let create storage =
         |> executeNonQuery
       
       member __.DeleteAll() = createCommand DeleteAll |> executeNonQuery
-      member __.Peek() = createCommand SelectFirstOfType |> peek
+      member __.PeekFirst() = createCommand SelectFirstOfType |> peek
+      member __.PeekAll() = createCommand SelectAllOfType |> peekAll
       member __.DeleteFirst<'a when 'a : not struct>() = createCommand DeleteFirstOfType |> deleteFirstOfType<'a>
     interface IDisposable with
       member __.Dispose() = connection.Dispose() }

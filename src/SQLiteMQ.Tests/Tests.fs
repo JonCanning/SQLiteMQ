@@ -88,16 +88,24 @@ let ``it persists the queue``() =
   <| Some cat
 
 [<Test>]
-let ``it peeks``() = 
+let ``it peeks 1``() = 
   use mq = MessageQueue.create InMemory
   let cat = { Cat.Name = "Bubbles" }
   cat |> mq.Enqueue
-  mq.Peek<Cat>()
+  mq.PeekFirst<Cat>()
   |> should equal
   <| Some cat
-  mq.Peek<Cat>()
+  mq.PeekFirst<Cat>()
   |> should equal
   <| Some cat
+
+[<Test>]
+let ``it peeks all``() = 
+  use mq = MessageQueue.create InMemory
+  let cats = [ 1..10 ] |> List.map (fun i -> { Cat.Name = sprintf "%i" i })
+  cats |> Seq.iter mq.Enqueue
+  mq.PeekAll<Cat>() |> should equal cats
+  mq.PeekAll<Cat>() |> should equal cats
 
 [<Test>]
 let ``it deletes``() = 
