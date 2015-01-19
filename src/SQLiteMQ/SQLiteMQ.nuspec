@@ -12,6 +12,6 @@
     </dependencies>
   </metadata>
   <files>
-    <file src="bin\release\SQLite.Interop.dll" target="lib" />
+    <file src="bin\release\SQLite.Interop.dll" target="content" />
   </files>
 </package>
