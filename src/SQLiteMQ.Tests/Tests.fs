@@ -122,7 +122,7 @@ let ``it triggers the OnEnqueue event``() =
   let are = new AutoResetEvent false
   let cat = { Cat.Name = "Bubbles" }
   mq.OnEnqueue.Publish.Add (fun o ->
-    o |> should equal <| mq.Dequeue()
+    o |> should equal <| mq.Dequeue<Cat>().Value
     are.Set() |> ignore
     )
   cat |> mq.Enqueue
