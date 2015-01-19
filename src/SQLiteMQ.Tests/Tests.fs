@@ -4,6 +4,7 @@ open FsUnit
 open MessageQueue
 open NUnit.Framework
 open System
+open System.Threading
 
 type Cat = 
   { Name : string }
@@ -114,3 +115,15 @@ let ``it deletes``() =
   cat |> mq.Enqueue
   mq.DeleteFirst<Cat>()
   mq.Dequeue<Cat>() |> should equal None
+
+[<Test>]
+let ``it triggers the OnEnqueue event``() =
+  use mq = MessageQueue.create InMemory
+  let are = new AutoResetEvent false
+  let cat = { Cat.Name = "Bubbles" }
+  mq.OnEnqueue.Publish.Add (fun o ->
+    o |> should equal <| mq.Dequeue()
+    are.Set() |> ignore
+    )
+  cat |> mq.Enqueue
+  are.WaitOne 500 |> should be True

@@ -15,6 +15,7 @@ type Operations =
   abstract PeekFirst<'a when 'a : not struct> : unit -> 'a option
   abstract PeekAll<'a when 'a : not struct> : unit -> 'a seq
   abstract DeleteFirst<'a when 'a : not struct> : unit -> unit
+  abstract member OnEnqueue : Event<obj>
 
 type Storage = 
   | InMemory
@@ -60,13 +61,14 @@ let private createCommand command =
     | DeleteAll -> "DELETE FROM MessageQueue"
   new SQLiteCommand(sql, connection)
 
-let private enqueue<'a> o command = 
+let private enqueue<'a when 'a : not struct> o (onEnqueue : Event<obj>) command = 
   let pickle = pickler.Pickle<'a> o
   command
   |> addTypeParameter<'a>
   |> addParameter ("Value", pickle)
   |> executeNonQuery
   |> ignore
+  onEnqueue.Trigger o
 
 let private deleteFirstOfType<'a> command = 
   if command
@@ -133,8 +135,10 @@ let create storage =
                 |> fun cs -> new SQLiteConnection(cs)
   connection.Open()
   createTable connection
+  let onEnqueue = Event<_>()
   { new Operations with
-      member __.Enqueue o = createCommand InsertOneOfType |> enqueue o
+      member __.OnEnqueue = onEnqueue
+      member this.Enqueue o = createCommand InsertOneOfType |> enqueue o this.OnEnqueue
       member __.Dequeue() = createCommand SelectFirstOfType |> dequeue
       member __.DequeueAll() = createCommand SelectAllOfType |> dequeueAll
       
