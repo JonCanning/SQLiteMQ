@@ -10,8 +10,8 @@
       <dependency id="FsPickler" />
       <dependency id="System.Data.SQLite.Core" />
     </dependencies>
-    <files>
-      <file src="bin\release\SQLite.Interop.dll" target="lib" />
-    </files>
   </metadata>
+  <files>
+    <file src="bin\release\SQLite.Interop.dll" target="lib" />
+  </files>
 </package>
