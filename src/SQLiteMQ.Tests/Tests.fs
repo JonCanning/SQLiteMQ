@@ -127,3 +127,15 @@ let ``it triggers the OnEnqueue event``() =
     )
   cat |> mq.Enqueue
   are.WaitOne 500 |> should be True
+
+[<Test>]
+let ``it triggers the OnEnqueueOf event``() =
+  use mq = MessageQueue.create InMemory
+  let are = new AutoResetEvent false
+  mq.OnEnqueueOf<Dog> (fun o ->
+    o |> should equal <| mq.Dequeue<Dog>().Value
+    are.Set() |> ignore
+    )
+  { Cat.Name = "Bubbles" } |> mq.Enqueue
+  { Dog.Name = "Rufus" } |> mq.Enqueue
+  are.WaitOne 500 |> should be True

@@ -15,7 +15,8 @@ type Operations =
   abstract PeekFirst<'a when 'a : not struct> : unit -> 'a option
   abstract PeekAll<'a when 'a : not struct> : unit -> 'a seq
   abstract DeleteFirst<'a when 'a : not struct> : unit -> unit
-  abstract member OnEnqueue : Event<obj>
+  abstract OnEnqueue : Event<obj>
+  abstract OnEnqueueOf<'a when 'a : not struct> : ('a -> unit) -> unit
 
 type Storage = 
   | InMemory
@@ -77,7 +78,7 @@ let private deleteFirstOfType<'a> command =
      <> 1
   then DeleteObjectFailed typeof<'a>.FullName |> raise
 
-let private peekAll<'a> command =
+let private peekAll<'a> command = 
   let reader = 
     command
     |> addTypeParameter<'a>
@@ -138,7 +139,18 @@ let create storage =
   let onEnqueue = Event<_>()
   { new Operations with
       member __.OnEnqueue = onEnqueue
-      member this.Enqueue o = createCommand InsertOneOfType |> enqueue o this.OnEnqueue
+      
+      member __.OnEnqueueOf (f : 'a -> unit) = 
+        let handleEnqueue = 
+          function 
+          | o when o.GetType() = typeof<'a> -> 
+            o
+            |> unbox
+            |> f
+          | _ -> ()
+        onEnqueue.Publish.Add handleEnqueue
+      
+      member __.Enqueue o = createCommand InsertOneOfType |> enqueue o onEnqueue
       member __.Dequeue() = createCommand SelectFirstOfType |> dequeue
       member __.DequeueAll() = createCommand SelectAllOfType |> dequeueAll
       
