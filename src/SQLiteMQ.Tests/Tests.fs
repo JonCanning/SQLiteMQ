@@ -3,8 +3,6 @@
 open FsUnit
 open MessageQueue
 open NUnit.Framework
-open System
-open System.Threading
 
 type Cat = 
   { Name : string }
