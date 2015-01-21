@@ -5,6 +5,10 @@ open System
 open System.Data.SQLite
 open System.IO
 
+type Message<'a> = 
+  { Id : int64
+    Body : 'a }
+
 type Operations = 
   inherit IDisposable
   abstract Enqueue<'a when 'a : not struct> : 'a -> unit
@@ -14,9 +18,6 @@ type Operations =
   abstract DeleteAll : unit -> int
   abstract PeekFirst<'a when 'a : not struct> : unit -> 'a option
   abstract PeekAll<'a when 'a : not struct> : unit -> 'a seq
-  abstract DeleteFirst<'a when 'a : not struct> : unit -> unit
-  abstract OnEnqueue : Event<obj>
-  abstract OnEnqueueOf<'a when 'a : not struct> : ('a -> unit) -> unit
 
 type Storage = 
   | InMemory
@@ -25,7 +26,7 @@ type Storage =
 
 type Command = 
   | InsertOneOfType
-  | DeleteFirstOfType
+  | DeleteWithId
   | SelectFirstOfType
   | SelectAllOfType
   | DeleteAllOfType
@@ -33,7 +34,7 @@ type Command =
   | CreateTable
   | DeleteAll
 
-exception DeleteObjectFailed of string
+exception DeleteMessageFailed of int64
 
 let private pickler = FsPickler.CreateBinary()
 let mutable private connection = Unchecked.defaultof<_>
@@ -48,77 +49,73 @@ let private addTypeParameter<'a> (command : SQLiteCommand) = command |> addParam
 let private executeNonQuery (command : SQLiteCommand) = command.ExecuteNonQuery()
 let private executeReader (command : SQLiteCommand) = command.ExecuteReader()
 
+let asMessage<'a> (reader : SQLiteDataReader) = 
+  use ms = new MemoryStream()
+  reader.GetStream(1).CopyTo ms
+  { Id = reader.GetInt64(0)
+    Body = pickler.UnPickle<'a>(ms.ToArray()) }
+
+let body = 
+  function 
+  | Some m -> Some m.Body
+  | _ -> None
+
 let private createCommand command = 
   let sql = 
     match command with
     | InsertOneOfType -> "INSERT INTO MessageQueue(Type,Value) values (@Type,@Value)"
-    | DeleteFirstOfType -> 
-      "DELETE FROM MessageQueue WHERE ROWID = (SELECT ROWID FROM MessageQueue WHERE Type=@Type LIMIT 1)"
+    | DeleteWithId -> "DELETE FROM MessageQueue WHERE Id = @Id"
     | DeleteAllOfType -> "DELETE FROM MessageQueue WHERE Type=@Type"
-    | SelectFirstOfType -> "SELECT Value FROM MessageQueue WHERE Type=@Type LIMIT 1"
-    | SelectAllOfType -> "SELECT Value FROM MessageQueue WHERE Type=@Type"
+    | SelectFirstOfType -> "SELECT Id, Value FROM MessageQueue WHERE Type=@Type LIMIT 1"
+    | SelectAllOfType -> "SELECT Id, Value FROM MessageQueue WHERE Type=@Type"
     | TableExists -> "SELECT name FROM sqlite_master WHERE type='table'"
-    | CreateTable -> "CREATE TABLE MessageQueue (Type VARCHAR, Value VARBINARY)"
+    | CreateTable -> "CREATE TABLE MessageQueue (Id INTEGER PRIMARY KEY AUTOINCREMENT, Type VARCHAR, Value VARBINARY)"
     | DeleteAll -> "DELETE FROM MessageQueue"
   new SQLiteCommand(sql, connection)
 
-let private enqueue<'a when 'a : not struct> o (onEnqueue : Event<obj>) command = 
+let private enqueue<'a when 'a : not struct> o createCommand = 
   let pickle = pickler.Pickle<'a> o
-  command
+  createCommand InsertOneOfType
   |> addTypeParameter<'a>
   |> addParameter ("Value", pickle)
   |> executeNonQuery
   |> ignore
-  onEnqueue.Trigger o
 
-let private deleteFirstOfType<'a> command = 
-  if command
-     |> addTypeParameter<'a>
+let private deleteMessage message createCommand = 
+  if createCommand DeleteWithId
+     |> addParameter ("Id", message.Id)
      |> executeNonQuery
      <> 1
-  then DeleteObjectFailed typeof<'a>.FullName |> raise
+  then DeleteMessageFailed message.Id |> raise
 
-let private peekAll<'a> command = 
+let peek<'a> createCommand = 
   let reader = 
-    command
-    |> addTypeParameter<'a>
-    |> executeReader
-  seq { 
-    while reader.Read() do
-      use ms = new MemoryStream()
-      reader.GetStream(0).CopyTo ms
-      yield pickler.UnPickle<'a>(ms.ToArray())
-  }
-
-let peek<'a> command = 
-  let reader = 
-    command
+    createCommand SelectFirstOfType
     |> addTypeParameter<'a>
     |> executeReader
   if reader.Read() then 
-    use ms = new MemoryStream()
-    reader.GetStream(0).CopyTo ms
-    let o = pickler.UnPickle<'a>(ms.ToArray())
-    Some o
+    reader
+    |> asMessage<'a>
+    |> Some
   else None
 
-let private dequeue<'a> command = 
-  let o = peek<'a> command
-  if o.IsSome then createCommand DeleteFirstOfType |> deleteFirstOfType<'a>
-  o
-
-let private dequeueAll<'a> command = 
+let private peekAll<'a> createCommand = 
   let reader = 
-    command
+    createCommand SelectAllOfType
     |> addTypeParameter<'a>
     |> executeReader
   seq { 
     while reader.Read() do
-      use ms = new MemoryStream()
-      reader.GetStream(0).CopyTo ms
-      createCommand DeleteFirstOfType |> deleteFirstOfType<'a>
-      yield pickler.UnPickle<'a>(ms.ToArray())
+      yield (reader |> asMessage<'a>).Body
   }
+
+let private dequeue<'a> createCommand deleteMessage = 
+  peek<'a> createCommand |> Option.bind (fun message -> 
+                              deleteMessage message createCommand
+                              Some message.Body)
+
+let private dequeueAll dequeue =
+  Seq.initInfinite (fun _ -> dequeue()) |> Seq.takeWhile Option.isSome |> Seq.choose id
 
 let private createTable _ = 
   use command = createCommand TableExists
@@ -128,6 +125,8 @@ let private createTable _ =
     |> executeNonQuery
     |> ignore
 
+let deleteDefaultDatabase _ = IO.File.Delete "SQLiteMQ.db"
+
 let create storage = 
   connection <- match storage with
                 | InMemory -> "Data Source=:memory:"
@@ -136,23 +135,10 @@ let create storage =
                 |> fun cs -> new SQLiteConnection(cs)
   connection.Open()
   createTable connection
-  let onEnqueue = Event<_>()
   { new Operations with
-      member __.OnEnqueue = onEnqueue
-      
-      member __.OnEnqueueOf (f : 'a -> unit) = 
-        let handleEnqueue = 
-          function 
-          | o when o.GetType() = typeof<'a> -> 
-            o
-            |> unbox
-            |> f
-          | _ -> ()
-        onEnqueue.Publish.Add handleEnqueue
-      
-      member __.Enqueue o = createCommand InsertOneOfType |> enqueue o onEnqueue
-      member __.Dequeue() = createCommand SelectFirstOfType |> dequeue
-      member __.DequeueAll() = createCommand SelectAllOfType |> dequeueAll
+      member __.Enqueue o = enqueue o createCommand
+      member __.Dequeue() = dequeue createCommand deleteMessage
+      member this.DequeueAll() = dequeueAll this.Dequeue
       
       member __.Delete<'a when 'a : not struct>() = 
         createCommand DeleteAllOfType
@@ -160,8 +146,7 @@ let create storage =
         |> executeNonQuery
       
       member __.DeleteAll() = createCommand DeleteAll |> executeNonQuery
-      member __.PeekFirst() = createCommand SelectFirstOfType |> peek
-      member __.PeekAll() = createCommand SelectAllOfType |> peekAll
-      member __.DeleteFirst<'a when 'a : not struct>() = createCommand DeleteFirstOfType |> deleteFirstOfType<'a>
+      member __.PeekFirst() = peek createCommand |> body
+      member __.PeekAll() = peekAll createCommand
     interface IDisposable with
       member __.Dispose() = connection.Dispose() }

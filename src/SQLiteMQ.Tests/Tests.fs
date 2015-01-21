@@ -78,6 +78,7 @@ let ``it can return a sequence of a type``() =
 
 [<Test>]
 let ``it persists the queue``() = 
+  deleteDefaultDatabase()
   let createMq _ = MessageQueue.create DefaultFile
   use mq = createMq()
   let cat = { Cat.Name = "Bubbles" }
@@ -107,35 +108,3 @@ let ``it peeks all``() =
   cats |> Seq.iter mq.Enqueue
   mq.PeekAll<Cat>() |> should equal cats
   mq.PeekAll<Cat>() |> should equal cats
-
-[<Test>]
-let ``it deletes``() = 
-  use mq = MessageQueue.create InMemory
-  let cat = { Cat.Name = "Bubbles" }
-  cat |> mq.Enqueue
-  mq.DeleteFirst<Cat>()
-  mq.Dequeue<Cat>() |> should equal None
-
-[<Test>]
-let ``it triggers the OnEnqueue event``() =
-  use mq = MessageQueue.create InMemory
-  let are = new AutoResetEvent false
-  let cat = { Cat.Name = "Bubbles" }
-  mq.OnEnqueue.Publish.Add (fun o ->
-    o |> should equal <| mq.Dequeue<Cat>().Value
-    are.Set() |> ignore
-    )
-  cat |> mq.Enqueue
-  are.WaitOne 500 |> should be True
-
-[<Test>]
-let ``it triggers the OnEnqueueOf event``() =
-  use mq = MessageQueue.create InMemory
-  let are = new AutoResetEvent false
-  mq.OnEnqueueOf<Dog> (fun o ->
-    o |> should equal <| mq.Dequeue<Dog>().Value
-    are.Set() |> ignore
-    )
-  { Cat.Name = "Bubbles" } |> mq.Enqueue
-  { Dog.Name = "Rufus" } |> mq.Enqueue
-  are.WaitOne 500 |> should be True
