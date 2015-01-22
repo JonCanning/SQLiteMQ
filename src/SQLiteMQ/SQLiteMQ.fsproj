@@ -47,7 +47,7 @@
       </PropertyGroup>
     </Otherwise>
   </Choose>
- <Import Project="$(MSBuildExtensionsPath32)\..\Microsoft SDKs\F#\3.1\Framework\v4.0\Microsoft.FSharp.Targets" />
+  <Import Project="$(MSBuildExtensionsPath32)\..\Microsoft SDKs\F#\3.1\Framework\v4.0\Microsoft.FSharp.Targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
   <Target Name="BeforeBuild">
@@ -57,11 +57,12 @@
   -->
   <ItemGroup>
     <Compile Include="MessageQueue.fs" />
-    <None Include="SQLite.Interop.dll">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
     <None Include="paket.references" />
     <None Include="SQLiteMQ.nuspec" />
+    <None Include="..\..\packages\System.Data.SQLite.Core\build\net451\x64\SQLite.Interop.dll">
+      <Link>SQLite.Interop.dll</Link>
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Reference Include="mscorlib" />
