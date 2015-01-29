@@ -6,8 +6,6 @@ open Fake
 let solutionFile = "SQLiteMQ.sln"
 let testDlls = !!"src/**/bin/Release/*Tests.dll"
 
-//Copy SQLite.Interop
-@"packages\System.Data.SQLite.Core\build\net451\x64\SQLite.Interop.dll" |> CopyFile @"src\SQLiteMQ\SQLite.Interop.dll"
 //Targets
 Target "Build" (fun _ -> 
   !!solutionFile

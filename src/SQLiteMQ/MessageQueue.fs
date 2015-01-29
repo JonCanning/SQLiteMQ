@@ -114,8 +114,10 @@ let private dequeue<'a> createCommand deleteMessage =
                               deleteMessage message createCommand
                               Some message.Body)
 
-let private dequeueAll dequeue =
-  Seq.initInfinite (fun _ -> dequeue()) |> Seq.takeWhile Option.isSome |> Seq.choose id
+let private dequeueAll dequeue = 
+  Seq.initInfinite (fun _ -> dequeue())
+  |> Seq.takeWhile Option.isSome
+  |> Seq.choose id
 
 let private createTable _ = 
   use command = createCommand TableExists
@@ -125,9 +127,16 @@ let private createTable _ =
     |> executeNonQuery
     |> ignore
 
-let deleteDefaultDatabase _ = IO.File.Delete "SQLiteMQ.db"
+let deleteDefaultDatabase _ = File.Delete "SQLiteMQ.db"
+
+let writeInterop _ = 
+  let ms = new MemoryStream()
+  (System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("SQLite.Interop.dll")).CopyTo ms
+  let path = Path.Combine(Environment.CurrentDirectory, "SQLite.Interop.dll")
+  if not <| File.Exists path then File.WriteAllBytes(path, ms.ToArray())
 
 let create storage = 
+  writeInterop()
   connection <- match storage with
                 | InMemory -> "Data Source=:memory:"
                 | DefaultFile -> "Data Source=SQLiteMQ.db"
