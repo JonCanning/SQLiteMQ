@@ -1,0 +1,7 @@
+﻿type project
+id SQLiteMQ
+authors Tiny Blue Robots
+description SQLiteMQ
+dependencies
+  FsPickler
+  System.Data.SQLite.Core
