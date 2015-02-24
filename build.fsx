@@ -14,12 +14,16 @@ Target "Build" (fun _ ->
 Target "Test" (fun _ -> 
   testDlls |> NUnit(fun p -> 
                 { p with DisableShadowCopy = true
-                         OutputFile = "TestResults.xml" }))
-Target "NuGet" (fun _ -> 
+                         OutputFile = "TestResults.xml" })
+  if appVeyorBuildVersion <> null then 
+    AppVeyor.UploadTestResultsXml AppVeyor.TestResultsType.NUnit "TestResults.xml")
+Target "NuGet" (fun _ ->
+  redirectOutputToTrace <- true
   Paket.Pack(fun p -> { p with Version = appVeyorBuildVersion })
   Paket.Push(fun p -> 
     { p with ApiKey = environVar "NUGETAPIKEY"
-             PublishUrl = environVar "NUGETSOURCE" })
+             PublishUrl = environVar "NUGETSOURCE"
+             WorkingDir = "./temp" })
   |> ignore)
 Target "Default" DoNothing
 Target "Appveyor" DoNothing
