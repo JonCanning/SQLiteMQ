@@ -19,11 +19,13 @@ Target "Test" (fun _ ->
     AppVeyor.UploadTestResultsXml AppVeyor.TestResultsType.NUnit "/")
 Target "NuGet" (fun _ ->
   Paket.Pack(fun p -> { p with Version = appVeyorBuildVersion })
+  let consoleOut = System.Console.Out
+  System.IO.TextWriter.Null |> System.Console.SetOut
   Paket.Push(fun p -> 
     { p with ApiKey = environVar "NUGETAPIKEY"
              PublishUrl = environVar "NUGETSOURCE"
              WorkingDir = "./temp" })
-  |> ignore)
+  System.Console.SetOut consoleOut)
 Target "Default" DoNothing
 Target "Appveyor" DoNothing
 // Dependencies
