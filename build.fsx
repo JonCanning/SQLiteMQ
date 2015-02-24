@@ -14,20 +14,15 @@ Target "Build" (fun _ ->
 Target "Test" (fun _ -> 
   testDlls |> NUnit(fun p -> 
                 { p with DisableShadowCopy = true
-                         OutputFile = "TestResults.xml" }))
-Target "NuGet" (fun _ -> 
-  (new System.Net.WebClient()).DownloadFile("http://nuget.org/nuget.exe", @"nuget.exe")
-  directExec 
-    (fun psi -> 
-    psi.FileName <- "nuget.exe"
-    psi.Arguments <- sprintf "pack src\SQLiteMQ\SQLiteMQ.fsproj -Version %s -Prop Configuration=Release" 
-                       appVeyorBuildVersion)
-  |> ignore
-  directExec 
-    (fun psi -> 
-    psi.FileName <- "nuget.exe"
-    psi.Arguments <- sprintf "push SQLiteMQ.%s.nupkg -ApiKey %s -Source %s" appVeyorBuildVersion 
-                     <| environVar "NUGETAPIKEY" <| environVar "NUGETSOURCE")
+                         OutputFile = "TestResults.xml" })
+  if appVeyorBuildVersion <> null then 
+    AppVeyor.UploadTestResultsXml AppVeyor.TestResultsType.NUnit "/")
+Target "NuGet" (fun _ ->
+  Paket.Pack(fun p -> { p with Version = appVeyorBuildVersion })
+  Paket.Push(fun p -> 
+    { p with ApiKey = environVar "NUGETAPIKEY"
+             PublishUrl = environVar "NUGETSOURCE"
+             WorkingDir = "./temp" })
   |> ignore)
 Target "Default" DoNothing
 Target "Appveyor" DoNothing
