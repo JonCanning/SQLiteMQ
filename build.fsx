@@ -16,7 +16,7 @@ Target "Test" (fun _ ->
                 { p with DisableShadowCopy = true
                          OutputFile = "TestResults.xml" })
   if appVeyorBuildVersion <> null then 
-    AppVeyor.UploadTestResultsXml AppVeyor.TestResultsType.NUnit "TestResults.xml")
+    AppVeyor.UploadTestResultsXml AppVeyor.TestResultsType.NUnit "/")
 Target "NuGet" (fun _ ->
   redirectOutputToTrace <- true
   Paket.Pack(fun p -> { p with Version = appVeyorBuildVersion })
