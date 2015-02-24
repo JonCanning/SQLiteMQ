@@ -18,7 +18,6 @@ Target "Test" (fun _ ->
   if appVeyorBuildVersion <> null then 
     AppVeyor.UploadTestResultsXml AppVeyor.TestResultsType.NUnit "/")
 Target "NuGet" (fun _ ->
-  redirectOutputToTrace <- true
   Paket.Pack(fun p -> { p with Version = appVeyorBuildVersion })
   Paket.Push(fun p -> 
     { p with ApiKey = environVar "NUGETAPIKEY"
