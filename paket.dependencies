@@ -1,7 +1,7 @@
 source https://nuget.org/api/v2
 
 nuget FSPickler
+nuget NUnit
 nuget System.Data.SQLite.Core
 nuget Fake
-nuget FSUnit
 nuget NUnit.Runners
