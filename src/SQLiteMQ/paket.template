@@ -2,6 +2,3 @@
 id SQLiteMQ
 authors Tiny Blue Robots
 description SQLiteMQ
-dependencies
-    FSPickler
-    System.Data.SQLite.Core

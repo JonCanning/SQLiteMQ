@@ -127,9 +127,9 @@ let private createTable _ =
     |> executeNonQuery
     |> ignore
 
-let deleteDefaultDatabase _ = File.Delete "SQLiteMQ.db"
+let deleteDefaultDatabase() = File.Delete "SQLiteMQ.db"
 
-let writeInterop _ = 
+let writeInterop() = 
   let ms = new MemoryStream()
   (System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("SQLite.Interop.dll")).CopyTo ms
   let path = Path.Combine(Environment.CurrentDirectory, "SQLite.Interop.dll")
