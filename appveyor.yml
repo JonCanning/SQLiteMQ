@@ -7,4 +7,4 @@ environment:
   NUGETAPIKEY:
     secure: U/C8utoQCzFyIpw6aBnkaMAasuZnUTRm/BClhJc1GPc=
   NUGETSOURCE:
-    secure: nok7AMySupNjXNQnJN9jGANsTdIeK8OGO4qapsIj32zPS/AGvtyf1vGauXe6IOSs+q8c3JspKddTH8kEj2aiUA==
+    secure: nok7AMySupNjXNQnJN9jGKo6kj6pXoViSNVJOjKahvFLsp2qZSjGy/th8t7npt4Q

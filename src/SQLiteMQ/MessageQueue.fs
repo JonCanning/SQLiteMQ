@@ -36,7 +36,7 @@ type Command =
 
 exception DeleteMessageFailed of int64
 
-let private pickler = FsPickler.CreateBinary()
+let private pickler = FsPickler.CreateBinarySerializer()
 let mutable private connection = Unchecked.defaultof<_>
 
 let addParameter (name : string, value : obj) (command : SQLiteCommand) = 

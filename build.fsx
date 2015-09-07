@@ -8,16 +8,16 @@ let testDlls = !!"src/**/bin/Release/*Tests.dll"
 
 //Targets
 Target "Build" (fun _ -> 
-  !!solutionFile
-  |> MSBuildRelease "" "Build"
-  |> ignore)
+  let buildParams _ = 
+    { MSBuildDefaults with Verbosity = Some Quiet
+                           Properties = [ "Configuration", "Release" ] }
+  build buildParams solutionFile)
 Target "Test" (fun _ -> 
   testDlls |> NUnit(fun p -> 
                 { p with DisableShadowCopy = true
                          OutputFile = "TestResults.xml" })
-  if appVeyorBuildVersion <> null then 
-    AppVeyor.UploadTestResultsXml AppVeyor.TestResultsType.NUnit "/")
-Target "NuGet" (fun _ ->
+  if appVeyorBuildVersion <> null then AppVeyor.UploadTestResultsXml AppVeyor.TestResultsType.NUnit "/")
+Target "NuGet" (fun _ -> 
   Paket.Pack(fun p -> { p with Version = appVeyorBuildVersion })
   let consoleOut = System.Console.Out
   System.IO.TextWriter.Null |> System.Console.SetOut

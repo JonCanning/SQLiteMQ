@@ -114,3 +114,5 @@ UpgradeLog*.XML
 src/UITests/results.xml
 
 paket-files
+.fake
+.paket
