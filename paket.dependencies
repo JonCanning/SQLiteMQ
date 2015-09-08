@@ -1,6 +1,7 @@
 source https://nuget.org/api/v2
 
 nuget FSPickler
+nuget Fsharp.Control.AsyncSeq
 nuget NUnit
 nuget System.Data.SQLite.Core
 nuget Fake

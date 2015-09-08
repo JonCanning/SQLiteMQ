@@ -4,6 +4,8 @@ open Nessos.FsPickler
 open System
 open System.Data.SQLite
 open System.IO
+open System.Data.Common
+open FSharp.Control
 
 type Message<'a> = 
   { Id : int64
@@ -11,13 +13,13 @@ type Message<'a> =
 
 type Operations = 
   inherit IDisposable
-  abstract Enqueue<'a when 'a : not struct> : 'a -> unit
-  abstract Dequeue<'a when 'a : not struct> : unit -> 'a option
-  abstract DequeueAll<'a when 'a : not struct> : unit -> 'a seq
-  abstract Delete<'a when 'a : not struct> : unit -> int
-  abstract DeleteAll : unit -> int
-  abstract PeekFirst<'a when 'a : not struct> : unit -> 'a option
-  abstract PeekAll<'a when 'a : not struct> : unit -> 'a seq
+  abstract Enqueue<'a when 'a : not struct> : 'a -> Async<unit>
+  abstract Dequeue<'a when 'a : not struct> : unit -> Async<'a option>
+  abstract DequeueAll<'a when 'a : not struct> : unit -> AsyncSeq<'a>
+  abstract Delete<'a when 'a : not struct> : unit -> Async<int>
+  abstract DeleteAll : unit -> Async<int>
+  abstract PeekFirst<'a when 'a : not struct> : unit -> Async<'a option>
+  abstract PeekAll<'a when 'a : not struct> : unit -> AsyncSeq<'a>
 
 type Storage = 
   | InMemory
@@ -46,19 +48,23 @@ let addParameter (name : string, value : obj) (command : SQLiteCommand) =
   command
 
 let private addTypeParameter<'a> (command : SQLiteCommand) = command |> addParameter ("Type", typeof<'a>.FullName)
-let private executeNonQuery (command : SQLiteCommand) = command.ExecuteNonQuery()
-let private executeReader (command : SQLiteCommand) = command.ExecuteReader()
+let private executeNonQuery (command : SQLiteCommand) = command.ExecuteNonQueryAsync() |> Async.AwaitTask
+let private executeReader (command : SQLiteCommand) = command.ExecuteReaderAsync() |> Async.AwaitTask
+let private read (reader : DbDataReader) = reader.ReadAsync() |> Async.AwaitTask
 
-let asMessage<'a> (reader : SQLiteDataReader) = 
+let asMessage<'a> (reader : DbDataReader) = 
   use ms = new MemoryStream()
   reader.GetStream(1).CopyTo ms
   { Id = reader.GetInt64(0)
     Body = pickler.UnPickle<'a>(ms.ToArray()) }
 
-let body = 
-  function 
-  | Some m -> Some m.Body
-  | _ -> None
+let body message = 
+  async { 
+    let! m = message
+    match m with
+    | Some m -> return Some m.Body
+    | _ -> return None
+  }
 
 let private createCommand command = 
   let sql = 
@@ -79,45 +85,55 @@ let private enqueue<'a when 'a : not struct> o createCommand =
   |> addTypeParameter<'a>
   |> addParameter ("Value", pickle)
   |> executeNonQuery
-  |> ignore
+  |> Async.Ignore
 
 let private deleteMessage message createCommand = 
-  if createCommand DeleteWithId
-     |> addParameter ("Id", message.Id)
-     |> executeNonQuery
-     <> 1
-  then DeleteMessageFailed message.Id |> raise
+  async { 
+    let! result = createCommand DeleteWithId
+                  |> addParameter ("Id", message.Id)
+                  |> executeNonQuery
+    match result with
+    | 1 -> ()
+    | _ -> DeleteMessageFailed message.Id |> raise
+  }
 
 let peek<'a> createCommand = 
-  let reader = 
-    createCommand SelectFirstOfType
-    |> addTypeParameter<'a>
-    |> executeReader
-  if reader.Read() then 
-    reader
-    |> asMessage<'a>
-    |> Some
-  else None
+  async { 
+    let! reader = createCommand SelectFirstOfType
+                  |> addTypeParameter<'a>
+                  |> executeReader
+    let! result = reader |> read
+    return match result with
+           | true -> 
+             reader
+             |> asMessage<'a>
+             |> Some
+           | _ -> None
+  }
 
 let private peekAll<'a> createCommand = 
   let reader = 
     createCommand SelectAllOfType
     |> addTypeParameter<'a>
     |> executeReader
-  seq { 
-    while reader.Read() do
-      yield (reader |> asMessage<'a>).Body
-  }
+  AsyncSeq.initInfiniteAsync (fun _ -> reader)
+  |> AsyncSeq.takeWhileAsync read
+  |> AsyncSeq.map (fun reader -> (reader |> asMessage<'a>).Body)
 
 let private dequeue<'a> createCommand deleteMessage = 
-  peek<'a> createCommand |> Option.bind (fun message -> 
-                              deleteMessage message createCommand
-                              Some message.Body)
+  async { 
+    let! message = peek<'a> createCommand
+    match message with
+    | Some message -> 
+      do! deleteMessage message createCommand
+      return Some message.Body
+    | None -> return None
+  }
 
 let private dequeueAll dequeue = 
-  Seq.initInfinite (fun _ -> dequeue())
-  |> Seq.takeWhile Option.isSome
-  |> Seq.choose id
+  AsyncSeq.initInfiniteAsync (fun _ -> dequeue())
+  |> AsyncSeq.takeWhile Option.isSome
+  |> AsyncSeq.choose id
 
 let private createTable _ = 
   use command = createCommand TableExists
